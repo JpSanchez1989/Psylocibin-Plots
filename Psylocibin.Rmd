@@ -1,0 +1,659 @@
+---
+title: "Psylocibin Plot"
+author: "EFIT Program"
+date: "15/8/2022"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+  toc_depth: 3
+  number_sections: true
+---
+
+# Psylocibin Plots
+
+In the following "chunk" you will find the code for importing the libraries, import and set the database, and to subset the original database for each one of the plots.
+
+```{r message=FALSE, warning=FALSE}
+# Libraries. 
+library(tidyverse)
+library(xlsx)
+library(psych)
+library(ggrepel)
+library(viridis)
+library(ggpubr)
+library(cowplot)
+
+# Importing the database. 
+Data <- read.xlsx2("DataBaseOK.xlsx", sheetIndex = 1)
+
+# Setting variables. 
+{
+  Data$Findings <- as.factor(Data$Findings)
+  Data$Type_Dosage <- as.character(Data$Type_Dosage)
+  Data$Dosage <- as.numeric(Data$Dosage)
+  Data$Period <- as.factor(Data$Period)
+  Data$Finding <- as.factor(Data$Finding)
+  Data$Construct <- as.factor(Data$Construct)
+  Data$Frequency <- as.numeric(Data$Frequency)
+}
+
+# Create the column for the size. 
+# This column helps to adjust the size for all the points in the plots. 
+Data$FreqSize <- Data$Frequency*2.5
+```
+
+# Background Colors.
+
+For the plots background a set of two different colors were created.
+
+## First Palette: For plots.
+
+```{r message=FALSE, warning=FALSE}
+
+# Creating the pallete for the background. 
+BGcolor <- colorRampPalette(c("#FDE725","#31688E","#6ECE58"))
+Backgrounds <- BGcolor(20)
+plot(1:20, pch = 15, col = Backgrounds, cex=2.5)
+```
+
+## Second Palette: For Legend.
+
+```{r message=FALSE, warning=FALSE}
+# This is to create a second, alternative pallette, 
+BGcolor2 <- colorRampPalette(c("#6ECE58","#31688E","#FDE725"))
+Backgrounds2 <- BGcolor2(20)
+plot(1:20, pch = 15, col = Backgrounds2, fill = Backgrounds2,
+     cex = 3)
+
+```
+
+# Pos/Neg Rates.
+
+## Data Subsets.
+
+For all the plots the "Subjective" construct will be removed order to make them more understandable.
+
+```{r}
+# To Plot 1
+toP1 <- subset(Data,Data$Period == "Acute" &
+                Data$Type_Dosage == "Variable Dosage (ug/kg)")
+
+# To Plot 2
+toP2 <- subset(Data,Data$Period == "Post_acute" &
+                Data$Type_Dosage == "Variable Dosage (ug/kg)")
+
+# To Plot 3
+toP3 <- subset(Data,Data$Period == "Acute" &
+                Data$Type_Dosage == "Fixed Dosage (mg)")
+
+# To Plot 4
+toP4 <- subset(Data,Data$Period == "Post_acute" &
+                Data$Type_Dosage == "Fixed Dosage (mg)")
+
+```
+
+## Rates Calculation.
+
+```{r}
+#To plot1 
+# "Creating" the color for the Background.
+# The rate of Positive to Negative findings is estimated for each plot. 
+
+# Create the table to know the frequency for each Finding.
+T1 <- table(toP1$Finding)
+# Transform the table into a Dataframe. 
+T1 <- as.data.frame(T1)
+# Calculating the rate.
+BgP1 <- (T1$Freq[1]-T1$Freq[3])/sum(T1$Freq[3],T1$Freq[1])*100
+BgP1 <- round(BgP1)
+
+#To plot2 
+T2 <- table(toP2$Finding)
+T2 <- as.data.frame(T2)
+BgP2 <- (T2$Freq[1]-T2$Freq[3])/sum(T2$Freq[3],T2$Freq[1])*100
+BgP2 <- round(abs(BgP2))
+
+#To plot3 
+T3 <- table(toP3$Finding)
+T3 <- as.data.frame(T3)
+BgP3 <- (T3$Freq[1]-T3$Freq[3])/sum(T3$Freq[3],T3$Freq[1])*100
+BgP3 <- round(abs(BgP3))
+
+#To plot4 
+T4 <- table(toP4$Finding)
+T4 <- as.data.frame(T4)
+BgP4 <- (T4$Freq[1]-T4$Freq[3])/sum(T4$Freq[3],T4$Freq[1])*100
+BgP4 <- round(abs(BgP4))
+
+```
+
+For each plot a Negative Vs. Positive rate was calculated. As follows:
+
+$$
+\frac{Negatives- Positives}{Positives+Negatives}*100
+$$
+
+To ease the color assignation for the backgrounds the results were rounded to the most proximate integer.
+
+# Plot 0: Background Legend.
+
+```{r}
+#BGData <- c(BgP1, BgP2, BgP3, BgP4) 
+BGData <- c(1:20)
+BGData <- as.data.frame(BGData)
+names(BGData) <- "PlotBG"
+BGData$PlotBG <- as.numeric(BGData$PlotBG)
+
+PA <- ggplot(BGData, aes(x=PlotBG,y=PlotBG))+
+  geom_point(aes(colour = PlotBG),size = 5)+
+  scale_colour_gradientn(colours= BGcolor(5),
+                        limits = c(1,5),
+                        labels = c("More\nNegative","More\nPositive"),
+                        breaks = c(1,5))+
+  theme(legend.position = "top",
+        legend.title.align = 0.5,
+        legend.text = element_text(size=8))+
+  guides(colour = guide_colorbar(
+    title = "Overall valence\n(Background colour)",
+    title.theme = element_text(hjust = 0.5,
+                               vjust = 0.5,
+                               size = 9, 
+                               face = "bold"),
+    title.position = "top",
+    title.hjust = 0.5,
+    title.vjust = 1,
+    barwidth = 6,
+    barheight = 0.5))
+  
+PA
+```
+
+# Plot 1: General Legend.
+
+This "plot" is coded because of the need of "one" legend for all the plots.
+
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+P0 <- ggplot(subset(Data, Data$Construct != "Subjective"),
+             aes(x = Dosage, y = Frequency)) + 
+  geom_point(aes(
+    fill = FinalResult,
+    shape = FinalResult,
+    size = FreqSize),
+    alpha=0.75, colour = "black", show.legend = T)+
+  scale_fill_manual(values = c("#FDE725","#31688E","#6ECE58",
+                               "#FDE725","#31688E",
+                               "#31688E",
+                               "#FDE725","#31688E","#6ECE58",
+                               "#FDE725","#31688E","#6ECE58",
+                               "#FDE725"))+
+  scale_shape_manual(values = c(22,22,22,
+                                21,21,
+                                24,
+                                25,25,25,
+                                23,23,23,
+                                14))+
+  scale_x_continuous(expand=c(0,0),limits = c(0,450), breaks = seq(0,450,50))+
+  scale_y_continuous(expand= c(0,0),limits = c(0,9.5), breaks = seq(0:9))+
+  labs(fill = "Group",
+       shape = "Group")+
+  theme_light()+
+  guides(size = "none")
+
+P0
+
+```
+
+```{r}
+P0_s <- ggplot(subset(Data, Data$Construct != "Subjective"),
+             aes(x = Dosage, y = Frequency)) + 
+  geom_point(aes(
+    fill = Finding,
+    color = Finding,
+    shape = Construct),
+    alpha=1, show.legend = T)+
+  scale_fill_manual(values = c("#FDE725","#31688E","#6ECE58"))+
+  scale_color_manual(values = c("#FDE725","#31688E","#6ECE58"))+
+  scale_shape_manual(values = c(22,21,24,25,23,14))+
+  labs(fill = "Valence\n(Colour)",
+       colour = "Valence\n(Colour)",
+       shape = "Construct\n(Shape)")+
+  theme_light()+
+  theme(
+    legend.title = element_text(face = "bold", size=9),
+    legend.key.size = unit(2, 'line'),
+    legend.key.height = unit(1, 'line'),
+    legend.key.width = unit(1.2, 'line'),
+    legend.title.align = 0.5,
+    legend.box.just = "center"
+    )+
+  guides(
+    color = guide_legend(override.aes = list(size=5)),
+    shape = guide_legend(override.aes = list(size=2.5,
+                                             fill = "black")))
+P0_s
+
+```
+
+# Plot 2: Acute - Variable Dosage.
+
+As all the plots follows the same "steps", only Plot 1 will be completely commented.
+
+```{r eval=FALSE, include=FALSE}
+# Plot 1
+# First, you need to create a "space" for the plot.
+# Here the data is subsetting to fit the needs.
+P1 <- ggplot(subset(Data,Data$Period == "Acute" &
+                Data$Type_Dosage == "Variable Dosage (ug/kg)"& 
+                  Data$Construct != "Subjective"), 
+       aes(x = Dosage, y = Frequency)) + 
+  # Then you add the "Points"
+  geom_point(aes(
+    # The fill color is decided by the FinalResult variable.
+    fill = FinalResult,
+    # As well as the shape for each point.
+    shape = FinalResult,
+    # The size is determined by the FreqSize variable.
+    size = FreqSize),
+    # The "transparency", and outline are setting here.
+    alpha=0.75, colour = "black")+
+  # Then, the color for each caegory is setted manually.
+  # Note: For each plot the code is different.
+  scale_fill_manual(values = c("#FDE725","#31688E","#6ECE58",
+                               "#FDE725","#31688E",
+                               "#FDE725","#31688E",
+                               "#FDE725","#31688E","#6ECE58",
+                               "#FDE725"))+
+  # Same with the shapes. 
+  scale_shape_manual(values = c(22,22,22,
+                                21,21,
+                                25,25,
+                                23,23,23,
+                                14))+
+  # Set the limits and brackets for X-axis.
+  scale_x_continuous(expand=c(0,0),limits = c(0,450), breaks = seq(0,450,50))+
+  # Set the limits and brackets for Y-axis.
+  scale_y_continuous(expand= c(0,0),limits = c(0,9.5), breaks = seq(0:9))+
+  # Set the labels for the plot. 
+  labs(title = "Acute Effects - Variable Dosage",
+       x = "Psilocybin Dosage (ug/kg)",
+       y = "Frequency of Effect",
+       fill = "Group",
+       shape = "Group")+
+  # Add the "Theme"
+  theme_light()+
+  # Custom the "Theme". 
+    theme(
+      # Center the main title and set the size.
+      plot.title = element_text(size = 9,hjust=0.5),
+      # Set the size for the axis titles. 
+      axis.title = element_text(size = 9),
+      # Set the size for x-axis hints. 
+      axis.text.x = element_text(size = 7),
+      # Hide the grid for the background.
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      # Set the color and transparency for the background according to the +/- rate. 
+      panel.background = element_rect(
+        fill = adjustcolor(Backgrounds[BgP1],
+                           alpha.f = 0.3)))+
+  # Hide the size in the Legend. 
+  guides(size = "none")
+
+
+P1
+
+```
+
+```{r}
+# Plot 1 "Simplified". 
+P1_s <- ggplot(subset(Data,Data$Period == "Acute" &
+                Data$Type_Dosage == "Variable Dosage (ug/kg)"& 
+                  Data$Construct != "Subjective"), 
+       aes(x = Dosage, y = Frequency)) + 
+  geom_point(aes(
+    fill = Finding,
+    color = Finding,
+    shape = Construct,
+    size = FreqSize),
+    alpha=1)+
+  geom_point(aes(shape = Construct, size = FreqSize),
+             colour = "black", show.legend = F)+
+  scale_fill_manual(values = c("#FDE725","#31688E","#6ECE58"))+
+  scale_color_manual(values = c("#FDE725","#31688E","#6ECE58"))+
+  scale_shape_manual(values = c(22,21,25,23,14))+
+  scale_x_continuous(expand=c(0,0),limits = c(0,450),
+                     breaks = seq(0,450,50))+
+  scale_y_continuous(expand= c(0,0),limits = c(0,9.5), 
+                     breaks = seq(0:9))+
+  labs(title = "Acute Effects - Variable Dosage",
+       x = "Psilocybin Dosage (ug/kg)",
+       y = "Frequency of Effect",
+       fill = "Finding",
+       colour = "Finding",
+       shape = "Construct")+
+  theme_light()+
+    theme(
+      plot.title = element_text(size = 9,hjust=0.5),
+      axis.title = element_text(size = 9),
+      axis.text.x = element_text(size = 7),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.background = element_rect(
+      fill = adjustcolor(Backgrounds2[18],
+                           alpha.f = 0.3)))+
+  guides(size = "none")
+
+P1_s
+
+```
+
+# Plot 3: Post Acute - Variable Dosage
+
+```{r eval=FALSE, include=FALSE}
+# Plot 2. 
+P2 <- ggplot(subset(Data,Data$Period == "Post_acute" &
+                Data$Type_Dosage == "Variable Dosage (ug/kg)"), 
+       aes(x = Dosage, y = Frequency)) + 
+  geom_point(aes(
+    fill = FinalResult,
+    shape = FinalResult,
+    size = FreqSize),
+    alpha=0.75, colour = "black", show.legend = T)+
+  scale_fill_manual(values = c("#FDE725","#31688E","#6ECE58",
+                               "#31688E","#6ECE58",
+                               "#FDE725","#31688E"))+
+  scale_shape_manual(values = c(22,22,22,
+                                25,25,
+                                23,23))+
+  scale_x_continuous(expand=c(0,0),
+                     limits = c(0,450), breaks = seq(0,450,50))+
+  scale_y_continuous(expand= c(0,0),
+                     limits = c(0,9.5), breaks = seq(0:9))+
+  labs(title = "Post Acute Effects - Variable Dosage",
+       x = "Psilocybin Dosage (ug/kg)",
+       y = "Frequency of Effect",
+       fill = "Group",
+       shape = "Group")+
+  theme_light()+
+    theme(
+      plot.title = element_text(size = 9,hjust=0.5),
+      axis.title = element_text(size = 9),
+      axis.text.x = element_text(size = 7),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.background = element_rect(
+        fill = adjustcolor(Backgrounds[BgP2],
+                           alpha.f = 0.3)))+
+  guides(size = "none")
+
+P2
+```
+
+```{r}
+# Plot 2. 
+P2_s <- ggplot(subset(Data,Data$Period == "Post_acute" &
+                Data$Type_Dosage == "Variable Dosage (ug/kg)"), 
+       aes(x = Dosage, y = Frequency)) + 
+  geom_point(aes(
+    fill = Finding,
+    color = Finding,
+    shape = Construct,
+    size = FreqSize),
+    alpha=1, show.legend = T)+
+  geom_point(aes(shape = Construct, size = FreqSize),
+             colour = "black", show.legend = F)+
+  scale_fill_manual(values = c("#FDE725","#31688E","#6ECE58"))+
+  scale_color_manual(values = c("#FDE725","#31688E","#6ECE58"))+
+  scale_shape_manual(values = c(22,25,23))+
+  scale_x_continuous(expand=c(0,0),
+                     limits = c(0,450), breaks = seq(0,450,50))+
+  scale_y_continuous(expand= c(0,0),
+                     limits = c(0,9.5), breaks = seq(0:9))+
+  labs(title = "Post Acute Effects - Variable Dosage",
+       x = "Psilocybin Dosage (ug/kg)",
+       y = "Frequency of Effect",
+       fill = "Finding",
+       colour = "Finding",
+       shape = "Construct")+
+  theme_light()+
+    theme(
+      plot.title = element_text(size = 9,hjust=0.5),
+      axis.title = element_text(size = 9),
+      axis.text.x = element_text(size = 7),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.background = element_rect(
+        fill = adjustcolor(Backgrounds2[8],
+                           alpha.f = 0.3)))+
+  guides(size = "none")
+
+P2_s
+
+```
+
+# Plot 4: Acute - Fixed Dosage
+
+```{r eval=FALSE, include=FALSE}
+# Plot 3. 
+P3 <- ggplot(subset(Data,Data$Period == "Acute" &
+                Data$Type_Dosage == "Fixed Dosage (mg)"), 
+       aes(x = Dosage, y = Frequency)) + 
+  geom_point(aes(
+    fill = FinalResult,
+    shape = FinalResult,
+    size = FreqSize),
+    alpha=0.75, colour = "black", show.legend = T)+
+  scale_fill_manual(values = c("#31688E","#6ECE58","#31688E"))+
+  scale_shape_manual(values = c(22,22,21))+
+  scale_x_continuous(expand=c(0,0),
+                     limits = c(0,2), breaks = seq(0,2,0.2))+
+  scale_y_continuous(expand= c(0,0),
+                     limits = c(0,9.5), breaks = seq(0:9))+
+  labs(title = "Acute Effects - Fixed Dosage",
+       x = "Psilocybin Dosage (mg)",
+       y = "Frequency of Effect",
+       fill = "Group",
+       shape = "Group")+
+  theme_light()+
+    theme(
+      plot.title = element_text(size = 9,hjust=0.5),
+      axis.title = element_text(size = 9),
+      axis.text.x = element_text(size = 7),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.background = element_rect(
+        fill = adjustcolor(Backgrounds[BgP3],
+                           alpha.f = 0.3)))+
+  guides(size = "none")
+
+P3
+
+```
+
+```{r}
+# Plot 3. 
+P3_s <- ggplot(subset(Data,Data$Period == "Acute" &
+                Data$Type_Dosage == "Fixed Dosage (mg)"), 
+       aes(x = Dosage, y = Frequency)) + 
+  geom_point(aes(
+    fill = Finding,
+    color = Finding,
+    shape = Construct,
+    size = FreqSize),
+    alpha=1, show.legend = T)+
+    geom_point(aes(shape = Construct, size = FreqSize),
+             colour = "black", show.legend = F)+
+  scale_fill_manual(values = c("#31688E","#6ECE58"))+
+  scale_color_manual(values = c("#31688E","#6ECE58"))+
+  scale_shape_manual(values = c(22,22,21))+
+  scale_x_continuous(expand=c(0,0),
+                     limits = c(0,2), breaks = seq(0,2,0.2))+
+  scale_y_continuous(expand= c(0,0),
+                     limits = c(0,9.5), breaks = seq(0:9))+
+  labs(title = "Acute Effects - Fixed Dosage",
+       x = "Psilocybin Dosage (mg)",
+       y = "Frequency of Effect",
+       fill = "Finding",
+       colour = "Finding",
+       shape = "Construct")+
+  theme_light()+
+    theme(
+      plot.title = element_text(size = 9,hjust=0.5),
+      axis.title = element_text(size = 9),
+      axis.text.x = element_text(size = 7),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.background = element_rect(
+        fill = adjustcolor(Backgrounds2[1],
+                           alpha.f = 0.3)))+
+  guides(size = "none")
+
+P3_s
+
+```
+
+# Plot 5: Post Acute - Fixed Dosage
+
+```{r eval=FALSE, include=FALSE}
+# Plot 4
+P4 <- ggplot(subset(Data,Data$Period == "Post_acute" &
+                Data$Type_Dosage == "Fixed Dosage (mg)"), 
+       aes(x = Dosage, y = Frequency)) + 
+  geom_point(aes(
+    fill = FinalResult,
+    shape = FinalResult,
+    size = FreqSize),
+    alpha=0.75, colour = "black", show.legend = T)+
+  scale_fill_manual(values = c("#31688E","#31688E","#31688E","#6ECE58"))+
+  scale_shape_manual(values = c(24,25,23,23))+
+  scale_x_continuous(expand=c(0,0),
+                     limits = c(0,50), breaks = seq(0,50,5))+
+  scale_y_continuous(expand= c(0,0),
+                     limits = c(0,9.5), breaks = seq(0:9))+
+  labs(title = "Post Acute Effects - Fixed Dosage",
+       x = "Psilocybin Dosage (mg)",
+       y = "Frequency of Effect",
+       fill = "Group",
+       shape = "Group")+
+  theme_light()+
+    theme(
+      plot.title = element_text(size = 9, hjust=0.5),
+      axis.title = element_text(size = 9),
+      axis.text.x = element_text(size = 7),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.background = element_rect(
+        fill = adjustcolor(Backgrounds[BgP4],
+                           alpha.f = 0.3)))+
+  guides(size = "none")
+
+P4
+
+```
+
+```{r}
+# Plot 4
+P4_s <- ggplot(subset(Data,Data$Period == "Post_acute" &
+                Data$Type_Dosage == "Fixed Dosage (mg)"), 
+       aes(x = Dosage, y = Frequency)) + 
+  geom_point(aes(
+    fill = Finding,
+    color = Finding,
+    shape = Construct,
+    size = FreqSize),
+    alpha=1, show.legend = T)+
+    geom_point(aes(shape = Construct, size = FreqSize),
+             colour = "black", show.legend = F)+
+  scale_fill_manual(values = c("#31688E","#6ECE58"))+
+  scale_color_manual(values = c("#31688E","#6ECE58"))+
+  scale_shape_manual(values = c(24,25,23))+
+  scale_x_continuous(expand=c(0,0),
+                     limits = c(0,50), breaks = seq(0,50,5))+
+  scale_y_continuous(expand= c(0,0),
+                     limits = c(0,9.5), breaks = seq(0:9))+
+  labs(title = "Post Acute Effects - Fixed Dosage",
+       x = "Psilocybin Dosage (mg)",
+       y = "Frequency of Effect",
+       fill = "Finding",
+       colour = "Finding",
+       shape = "Construct")+
+  theme_light()+
+    theme(
+      plot.title = element_text(size = 9, hjust=0.5),
+      axis.title = element_text(size = 9),
+      axis.text.x = element_text(size = 7),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.background = element_rect(
+        fill = adjustcolor(Backgrounds2[1],
+                           alpha.f = 0.3)))+
+  guides(size = "none")
+
+P4_s
+
+```
+
+# Final Plot.
+
+```{r eval=FALSE, include=FALSE}
+# Putting all plots together. 
+allplots <- plot_grid(
+  P1+theme(legend.position = "none"),
+  P2+theme(legend.position = "none"),
+  P3+theme(legend.position = "none"),
+  P4+theme(legend.position = "none"),
+  labels = c("(A)","(B)","(C)","(D)"),
+  ncol = 2, nrow = 2, axis = "none",
+  label_size = 9)
+
+allplots
+
+# Adding Shared Legend.
+#Getting the legend from P0.
+legend <- get_legend(P0 + theme(legend.box.margin = margin(0,0,0,0)))
+
+# Merging the plots and the legend. 
+plot_grid(allplots, legend, ncol = 2, nrow = 1,
+          rel_widths = c(3, 1), scale =0.95)
+```
+
+```{r warning=FALSE}
+# Putting all plots together. 
+allplots_s <- plot_grid(
+  P1_s+theme(legend.position = "none"),
+  P2_s+theme(legend.position = "none"),
+  P3_s+theme(legend.position = "none"),
+  P4_s+theme(legend.position = "none"),
+  labels = c("(A)","(B)","(C)","(D)"),
+  ncol = 2, nrow = 2, axis = "none", label_size = 9)
+
+allplots_s
+
+# Adding the Legend.
+#Getting the legend from PA
+BGlegend <- get_legend(PA + theme(legend.box.margin = 
+                                    margin(-100,0,0,0)))
+#Getting the legend from P0.
+legend <- get_legend(P0_s + theme(legend.box.margin = margin(-55,0,0,0)))
+
+# Merging the plots and the legend. 
+PlotA <- plot_grid(legend, BGlegend, ncol = 1, nrow = 2,
+                   rel_heights = c(20, 1), scale =0.90)
+PlotA
+
+PlotB <- plot_grid(allplots_s, PlotA,ncol = 2, nrow = 1,
+                   rel_widths = c(3, 1), scale =0.95)
+PlotB
+```
+
+# Saving the Plot. 
+
+```{r}
+# Exporting the plot. 
+ggsave("psylocibin.jpg", PlotB, 
+       width = 180, units = "mm",
+       dpi=300)
+
+```
